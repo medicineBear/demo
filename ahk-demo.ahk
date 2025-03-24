@@ -1,24 +1,41 @@
 #Requires AutoHotkey v2.0
+#SingleInstance Force
 
-; 主GUI
-mainGui := Gui()
-mainGui.Title := "配置文件快捷入口"
-mainGui.OnEvent("Close", GuiClose)
-yPos := 10  ; 初始Y坐标
+; 全局变量
+global mainGui
+global isGuiVisible := false
 
-; 添加按钮用于打开添加新项的GUI
-addBtn := mainGui.Add("Button", "x10 y10 w100 h30", "添加新项")
-addBtn.OnEvent("Click", ShowAddItemGui)
+; 创建主GUI但不显示
+CreateMainGui()
 
-; 读取并显示现有配置
-ReadAndShowConfig(mainGui)
+; 设置热键 Ctrl+Space 切换窗口显示
+^Space::ToggleGuiVisibility()
 
-; 显示主GUI
-mainGui.Show()
+; 创建主GUI函数
+CreateMainGui() {
+    mainGui := Gui()
+    mainGui.Title := "快捷启动器 (Ctrl+Space 切换显示)"
+    mainGui.OnEvent("Close", (*) => mainGui.Hide())
+    
+    ; 添加按钮用于打开添加新项的GUI
+    addBtn := mainGui.Add("Button", "x10 y10 w100 h30", "添加新项")
+    addBtn.OnEvent("Click", ShowAddItemGui)
+    
+    ; 读取并显示现有配置
+    ReadAndShowConfig(mainGui)
+}
 
-; 关闭事件
-GuiClose(*) {
-    ExitApp
+; 切换GUI显示状态
+ToggleGuiVisibility() {
+    if isGuiVisible {
+        mainGui.Hide()
+        isGuiVisible := false
+    } else {
+        ; 重新加载配置以确保显示最新内容
+        ReadAndShowConfig(mainGui)
+        mainGui.Show()
+        isGuiVisible := true
+    }
 }
 
 ; 读取配置并显示按钮
@@ -33,6 +50,11 @@ ReadAndShowConfig(guiObj) {
     }
     
     yPos := 50  ; 从添加按钮下方开始
+    
+    ; 如果配置文件不存在则创建
+    if !FileExist("config.ini") {
+        FileAppend("", "config.ini")
+    }
     
     ; 读取配置文件所有节
     sections := []
@@ -78,7 +100,7 @@ ReadAndShowConfig(guiObj) {
             
             ; 创建按钮并绑定事件
             btn := guiObj.Add("Button", "x" btnX " y" btnY " w" buttonWidth, key)
-            btn.OnEvent("Click", EventHandler.Bind(path))
+            btn.OnEvent("Click", (*) => ButtonClickHandler(path))
             
             ; 更新行列计数器
             if (++currentCol >= 3) {
@@ -90,6 +112,17 @@ ReadAndShowConfig(guiObj) {
         ; 更新下一个分组的Y坐标
         yPos := groupBoxY + groupHeight + 20
         lastGroupBoxY := yPos
+    }
+}
+
+; 按钮点击处理函数（点击后打开路径并关闭窗口）
+ButtonClickHandler(path) {
+    try {
+        Run('"' path '"')  ; 处理带空格的路径
+        mainGui.Hide()
+        isGuiVisible := false
+    } catch Error as e {
+        MsgBox "无法打开路径：`n" path "`n错误信息：" e.Message
     }
 }
 
@@ -154,12 +187,4 @@ AddNewItem(sectionEdit, keyEdit, pathEdit, addGui, *) {
     ReadAndShowConfig(mainGui)
     
     MsgBox("添加成功!", "提示", "Iconi")
-}
-
-; 按钮点击事件处理
-EventHandler(path, *) {
-    try Run('"' path '"')  ; 处理带空格的路径
-    catch Error as e {
-        MsgBox "无法打开路径：`n" path "`n错误信息：" e.Message
-    }
 }
